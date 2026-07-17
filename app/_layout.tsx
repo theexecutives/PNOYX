@@ -13,6 +13,15 @@ export default function RootLayout() {
           <Stack.Screen name="intro" />
           <Stack.Screen name="signin" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="account-settings" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="continue-watching" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="help-center" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="categories" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="top-picks" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="purchase-history" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="trending" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="devices" options={{ animation: 'slide_from_right' }} />
         </Stack>
       </AuthProvider>
     </SafeAreaProvider>

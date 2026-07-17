@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,41 +6,30 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, BG_IMAGE_URI, Spacing, Radius } from '../../constants/theme';
+import { useRouter } from 'expo-router';
+import { Colors, BG_IMAGE_URI, Spacing, Radius, FontSize, FontWeight } from '../../constants/theme';
 import { useAuth } from '../../hooks/useAuth';
+import { useMovies } from '../../hooks/useMovies';
+import { HeroBanner } from '../../components/ui/HeroBanner';
+import { CATEGORIES } from '../../services/movieService';
+import type { Movie } from '../../services/movieService';
 
 const { width } = Dimensions.get('window');
 
-const FEATURED = [
-  { id: '1', title: 'Shadow Empire', genre: 'Action · Thriller', year: '2026', rating: '8.4', color: '#1a0a00' },
-  { id: '2', title: 'Neon Drift', genre: 'Sci-Fi · Drama', year: '2026', rating: '7.9', color: '#000d1a' },
-  { id: '3', title: 'Gold Rush', genre: 'Adventure', year: '2025', rating: '8.1', color: '#1a1400' },
-];
-
-const TRENDING = [
-  { id: '4', title: 'Last Signal', genre: 'Horror', rating: '7.6' },
-  { id: '5', title: 'Beyond Zero', genre: 'Sci-Fi', rating: '8.2' },
-  { id: '6', title: 'Ember City', genre: 'Drama', rating: '7.4' },
-  { id: '7', title: 'Phantom Route', genre: 'Thriller', rating: '8.0' },
-];
-
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
+  const { movies, trendingMovies, loading, activeCategory, filterByCategory } = useMovies();
   const firstName = user?.user_metadata?.full_name?.split(' ')[0] ?? 'Cinephile';
 
   return (
     <View style={styles.container}>
-      {/* Background */}
-      <Image
-        source={{ uri: BG_IMAGE_URI }}
-        style={StyleSheet.absoluteFillObject}
-        contentFit="cover"
-        transition={200}
-      />
+      <Image source={{ uri: BG_IMAGE_URI }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
       <View style={styles.overlay} />
 
       <ScrollView
@@ -59,38 +48,83 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        {/* Featured Section */}
-        <Text style={styles.sectionTitle}>Featured</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: Spacing.md, gap: 14 }}
-          style={{ marginBottom: 28 }}
-        >
-          {FEATURED.map((item) => (
-            <TouchableOpacity key={item.id} activeOpacity={0.82} style={[styles.featuredCard, { backgroundColor: item.color }]}>
-              <View style={styles.featuredCardInner}>
-                <View style={styles.ratingBadge}>
-                  <Text style={styles.ratingText}>★ {item.rating}</Text>
-                </View>
-                <View style={styles.featuredMeta}>
-                  <Text style={styles.featuredTitle}>{item.title}</Text>
-                  <Text style={styles.featuredGenre}>{item.genre}</Text>
-                  <Text style={styles.featuredYear}>{item.year}</Text>
-                </View>
+        {/* Hero Banner */}
+        <HeroBanner />
+
+        {/* Category Filter */}
+        <View style={styles.categorySection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: Spacing.md, gap: 8 }}
+          >
+            {CATEGORIES.map((cat) => (
+              <TouchableOpacity
+                key={cat.id}
+                style={[styles.catChip, activeCategory === cat.id && styles.catChipActive]}
+                onPress={() => filterByCategory(cat.id)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.catChipText, activeCategory === cat.id && styles.catChipTextActive]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Movies Grid */}
+        <Text style={styles.sectionTitle}>
+          {activeCategory === 'all' ? 'All Titles' : CATEGORIES.find(c => c.id === activeCategory)?.label ?? 'Browse'}
+        </Text>
+        <FlatList
+          data={movies}
+          keyExtractor={(item: Movie) => item.id}
+          numColumns={2}
+          scrollEnabled={false}
+          contentContainerStyle={{ paddingHorizontal: Spacing.md, gap: 12 }}
+          columnWrapperStyle={{ gap: 12 }}
+          renderItem={({ item }: { item: Movie }) => (
+            <TouchableOpacity
+              style={styles.movieCard}
+              activeOpacity={0.82}
+              onPress={() => router.push(`/movie/${item.id}` as any)}
+            >
+              <Image
+                source={{ uri: item.poster }}
+                style={styles.moviePoster}
+                contentFit="cover"
+                transition={200}
+              />
+              <View style={styles.movieOverlay}>
+                {item.is_free ? (
+                  <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>FREE</Text></View>
+                ) : (
+                  <View style={styles.premiumBadge}><Text style={styles.premiumBadgeText}>PREMIUM</Text></View>
+                )}
+              </View>
+              <View style={styles.movieInfo}>
+                <Text style={styles.movieTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.movieMeta}>★ {item.rating}  ·  {item.year}</Text>
               </View>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+          )}
+        />
 
-        {/* Trending Section */}
-        <Text style={styles.sectionTitle}>Trending Now</Text>
-        <View style={styles.trendingGrid}>
-          {TRENDING.map((item, index) => (
-            <TouchableOpacity key={item.id} activeOpacity={0.8} style={styles.trendingCard}>
+        {/* Trending Now */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Trending Now</Text>
+        <View style={styles.trendingList}>
+          {trendingMovies.slice(0, 5).map((item: Movie, index: number) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.trendingCard}
+              activeOpacity={0.8}
+              onPress={() => router.push(`/movie/${item.id}` as any)}
+            >
               <View style={styles.trendingIndex}>
                 <Text style={styles.trendingIndexText}>{index + 1}</Text>
               </View>
+              <Image source={{ uri: item.poster }} style={styles.trendingThumb} contentFit="cover" transition={200} />
               <View style={styles.trendingInfo}>
                 <Text style={styles.trendingTitle}>{item.title}</Text>
                 <Text style={styles.trendingGenre}>{item.genre}</Text>
@@ -112,74 +146,88 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     paddingHorizontal: Spacing.md,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
   greeting: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 2 },
   userName: { fontSize: 22, fontWeight: '700', color: '#FFFFFF' },
   logoSmall: { fontSize: 22, fontWeight: '900', color: '#FFFFFF', letterSpacing: 2 },
   logoSmallX: { color: '#FFD700' },
+  categorySection: { marginVertical: 16 },
+  catChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  catChipActive: { backgroundColor: '#FFD700', borderColor: '#FFD700' },
+  catChipText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.6)' },
+  catChipTextActive: { color: '#000' },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
     paddingHorizontal: Spacing.md,
-    marginBottom: 14,
+    marginBottom: 12,
     letterSpacing: 0.3,
   },
-  featuredCard: {
-    width: width * 0.58,
-    height: 220,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.18)',
-    overflow: 'hidden',
-  },
-  featuredCardInner: {
+  movieCard: {
     flex: 1,
-    padding: 14,
-    justifyContent: 'space-between',
-  },
-  ratingBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,215,0,0.18)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#111',
     borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.4)',
+    borderColor: 'rgba(255,215,0,0.1)',
   },
-  ratingText: { fontSize: 12, fontWeight: '700', color: '#FFD700' },
-  featuredMeta: {},
-  featuredTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 },
-  featuredGenre: { fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 2 },
-  featuredYear: { fontSize: 11, color: 'rgba(255,215,0,0.6)' },
-  trendingGrid: {
-    paddingHorizontal: Spacing.md,
-    gap: 10,
+  moviePoster: { width: '100%', height: (width / 2 - Spacing.md - 6) * 1.4 },
+  movieOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
   },
+  freeBadge: {
+    backgroundColor: 'rgba(68,255,136,0.9)',
+    borderRadius: Radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  freeBadgeText: { fontSize: 10, fontWeight: '800', color: '#000' },
+  premiumBadge: {
+    backgroundColor: 'rgba(255,215,0,0.9)',
+    borderRadius: Radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  premiumBadgeText: { fontSize: 10, fontWeight: '800', color: '#000' },
+  movieInfo: { padding: 10 },
+  movieTitle: { fontSize: 13, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
+  movieMeta: { fontSize: 11, color: 'rgba(255,215,0,0.7)' },
+  trendingList: { paddingHorizontal: Spacing.md, gap: 10 },
   trendingCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(12,12,12,0.85)',
+    backgroundColor: 'rgba(12,12,12,0.88)',
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: 'rgba(255,215,0,0.12)',
-    padding: 14,
-    gap: 14,
+    padding: 10,
+    gap: 12,
   },
   trendingIndex: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,215,0,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255,215,0,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  trendingIndexText: { fontSize: 13, fontWeight: '800', color: '#FFD700' },
+  trendingIndexText: { fontSize: 12, fontWeight: '800', color: '#FFD700' },
+  trendingThumb: { width: 48, height: 66, borderRadius: Radius.sm },
   trendingInfo: { flex: 1 },
-  trendingTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF', marginBottom: 3 },
-  trendingGenre: { fontSize: 12, color: 'rgba(255,255,255,0.45)' },
-  trendingRating: { fontSize: 13, fontWeight: '700', color: '#FFD700' },
+  trendingTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', marginBottom: 3 },
+  trendingGenre: { fontSize: 11, color: 'rgba(255,255,255,0.45)' },
+  trendingRating: { fontSize: 12, fontWeight: '700', color: '#FFD700' },
 });

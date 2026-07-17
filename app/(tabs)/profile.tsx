@@ -17,6 +17,17 @@ import { BG_IMAGE_URI, Spacing, Radius, Colors } from '../../constants/theme';
 import { useAuth } from '../../hooks/useAuth';
 import { signOut } from '../../services/authService';
 
+const MENU_ITEMS = [
+  { icon: 'bookmark', label: 'My Watchlist', route: null },
+  { icon: 'favorite', label: 'Favorites', route: null },
+  { icon: 'play-circle-outline', label: 'Continue Watching', route: '/continue-watching' },
+  { icon: 'history', label: 'Purchase History', route: '/purchase-history' },
+  { icon: 'notifications', label: 'Notifications', route: '/notifications' },
+  { icon: 'settings', label: 'Account Settings', route: '/account-settings' },
+  { icon: 'devices', label: 'Manage Devices', route: '/devices' },
+  { icon: 'help', label: 'Help Center', route: '/help-center' },
+];
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -43,6 +54,10 @@ export default function ProfileScreen() {
     }
   }
 
+  function handleMenuPress(route: string | null) {
+    if (route) router.push(route as any);
+  }
+
   return (
     <View style={styles.container}>
       <Image source={{ uri: BG_IMAGE_URI }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
@@ -60,7 +75,7 @@ export default function ProfileScreen() {
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
             ) : (
               <View style={styles.avatarFallback}>
-                <Text style={styles.avatarInitial}>{fullName[0]?.toUpperCase()}</Text>
+                <Text style={styles.avatarInitial}>{(fullName[0] ?? 'P').toUpperCase()}</Text>
               </View>
             )}
           </View>
@@ -81,16 +96,25 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+        {/* Coin Wallet */}
+        <TouchableOpacity style={styles.walletCard} activeOpacity={0.84}>
+          <View>
+            <Text style={styles.walletLabel}>PNOYX Coins</Text>
+            <Text style={styles.walletBalance}>₱ 29.00</Text>
+            <Text style={styles.walletSub}>Welcome bonus · Tap to top up</Text>
+          </View>
+          <MaterialIcons name="account-balance-wallet" size={36} color="#FFD700" />
+        </TouchableOpacity>
+
         {/* Menu Items */}
         <View style={styles.menu}>
-          {[
-            { icon: 'bookmark', label: 'My Watchlist' },
-            { icon: 'favorite', label: 'Favorites' },
-            { icon: 'star', label: 'My Reviews' },
-            { icon: 'notifications', label: 'Notifications' },
-            { icon: 'settings', label: 'Settings' },
-          ].map((item) => (
-            <TouchableOpacity key={item.label} style={styles.menuItem} activeOpacity={0.78}>
+          {MENU_ITEMS.map((item) => (
+            <TouchableOpacity
+              key={item.label}
+              style={styles.menuItem}
+              activeOpacity={0.78}
+              onPress={() => handleMenuPress(item.route)}
+            >
               <MaterialIcons name={item.icon as any} size={20} color="#FFD700" />
               <Text style={styles.menuLabel}>{item.label}</Text>
               <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.3)" />
@@ -105,7 +129,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Web confirm modal */}
       {Platform.OS === 'web' && (
         <Modal visible={confirmVisible} transparent animationType="fade">
           <View style={styles.modalBg}>
@@ -133,15 +156,15 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)' },
   header: { paddingHorizontal: Spacing.md, paddingBottom: 8 },
   pageTitle: { fontSize: 28, fontWeight: '800', color: '#FFFFFF' },
-  avatarSection: { alignItems: 'center', paddingVertical: 28 },
+  avatarSection: { alignItems: 'center', paddingVertical: 24 },
   avatarRing: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     borderWidth: 2.5,
     borderColor: '#FFD700',
     overflow: 'hidden',
-    marginBottom: 14,
+    marginBottom: 12,
     shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
@@ -168,12 +191,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   memberBadgeText: { fontSize: 11, fontWeight: '700', color: '#FFD700', letterSpacing: 2 },
-  statsRow: {
-    flexDirection: 'row',
-    marginHorizontal: Spacing.md,
-    marginBottom: 24,
-    gap: 10,
-  },
+  statsRow: { flexDirection: 'row', marginHorizontal: Spacing.md, marginBottom: 16, gap: 10 },
   statBox: {
     flex: 1,
     backgroundColor: 'rgba(12,12,12,0.88)',
@@ -185,7 +203,22 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 22, fontWeight: '800', color: '#FFD700', marginBottom: 3 },
   statLabel: { fontSize: 11, color: 'rgba(255,255,255,0.45)' },
-  menu: { marginHorizontal: Spacing.md, gap: 6, marginBottom: 24 },
+  walletCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: Spacing.md,
+    marginBottom: 20,
+    backgroundColor: 'rgba(255,215,0,0.08)',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.3)',
+    padding: 18,
+  },
+  walletLabel: { fontSize: 12, color: 'rgba(255,215,0,0.7)', fontWeight: '600', marginBottom: 4 },
+  walletBalance: { fontSize: 28, fontWeight: '900', color: '#FFD700', marginBottom: 2 },
+  walletSub: { fontSize: 11, color: 'rgba(255,255,255,0.4)' },
+  menu: { marginHorizontal: Spacing.md, gap: 6, marginBottom: 20 },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
