@@ -20,7 +20,9 @@ import {
   signUpWithEmail,
   sendEmailOTP,
   verifyEmailOTP,
+  sendPasswordReset,
 } from '../services/authService';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BG_IMAGE_URI, Spacing, Radius } from '../constants/theme';
 import { useAuth } from '../hooks/useAuth';
 import { useRouter } from 'expo-router';
@@ -29,6 +31,7 @@ const { width } = Dimensions.get('window');
 
 type Mode = 'signin' | 'signup' | 'otp';
 type OtpStep = 'send' | 'verify';
+type ForgotStep = 'idle' | 'form' | 'sent';
 
 function showNativeAlert(title: string, message: string) {
   if (Platform.OS !== 'web') Alert.alert(title, message);
@@ -51,6 +54,9 @@ export default function SignInScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [forgotStep, setForgotStep] = useState<ForgotStep>('idle');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   // Redirect when session is established (handles web OAuth redirect return)
   useEffect(() => {
@@ -73,7 +79,23 @@ export default function SignInScreen() {
     setMode(m);
     setOtpStep('send');
     setOtpCode('');
+    setForgotStep('idle');
+    setForgotEmail('');
     clearMessages();
+  }
+
+  async function handleForgotPassword() {
+    const target = forgotEmail.trim() || email.trim();
+    if (!target) { setErrorMsg('Please enter your email address.'); return; }
+    setForgotLoading(true);
+    clearMessages();
+    const { error } = await sendPasswordReset(target);
+    setForgotLoading(false);
+    if (error) {
+      setErrorMsg(error);
+    } else {
+      setForgotStep('sent');
+    }
   }
 
   // ── Google ─────────────────────────────────────────────────────────────────
@@ -354,14 +376,86 @@ export default function SignInScreen() {
                     returnKeyType="done"
                     onSubmitEditing={handleEmailAuth}
                   />
+                  {mode === 'signin' && forgotStep === 'idle' ? (
+                    <TouchableOpacity
+                      style={styles.forgotLink}
+                      onPress={() => { clearMessages(); setForgotEmail(email.trim()); setForgotStep('form'); }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.forgotLinkText}>Forgot Password?</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
 
-                {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                {/* ── Forgot Password inline panel ── */}
+                {mode === 'signin' && forgotStep !== 'idle' ? (
+                  <View style={styles.forgotPanel}>
+                    {forgotStep === 'sent' ? (
+                      <>
+                        <MaterialIcons name="mark-email-read" size={28} color="#44FF88" style={{ alignSelf: 'center', marginBottom: 8 }} />
+                        <Text style={styles.forgotSentTitle}>Check your inbox</Text>
+                        <Text style={styles.forgotSentBody}>
+                          A password reset link was sent to{' '}
+                          <Text style={{ color: '#FFD700', fontWeight: '700' }}>{forgotEmail || email}</Text>.
+                          Follow the link to set a new password.
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.forgotBackBtn}
+                          onPress={() => { setForgotStep('idle'); clearMessages(); }}
+                          activeOpacity={0.8}
+                        >
+                          <MaterialIcons name="arrow-back" size={15} color="#FFD700" />
+                          <Text style={styles.forgotBackText}>Back to Sign In</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.forgotPanelTitle}>Reset Password</Text>
+                        <Text style={styles.forgotPanelSub}>Enter the email linked to your account and we will send you a reset link.</Text>
+                        <TextInput
+                          style={[styles.input, { marginBottom: 10 }]}
+                          placeholder="your@email.com"
+                          placeholderTextColor="rgba(255,255,255,0.3)"
+                          value={forgotEmail}
+                          onChangeText={(v) => { setForgotEmail(v); clearMessages(); }}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                        {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                        <View style={styles.forgotActions}>
+                          <TouchableOpacity
+                            style={styles.forgotCancelBtn}
+                            onPress={() => { setForgotStep('idle'); clearMessages(); }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.forgotCancelText}>Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.forgotSendBtn, forgotLoading && styles.btnDisabled]}
+                            onPress={handleForgotPassword}
+                            disabled={forgotLoading}
+                            activeOpacity={0.84}
+                          >
+                            {forgotLoading
+                              ? <ActivityIndicator color="#000" size="small" />
+                              : <Text style={styles.forgotSendText}>Send Link</Text>
+                            }
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    )}
+                  </View>
+                ) : null}
+
+                {mode === 'signin' && forgotStep === 'idle' && errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                {mode !== 'signin' && errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
                 {successMsg ? <Text style={styles.successText}>{successMsg}</Text> : null}
 
                 <TouchableOpacity
-                  style={[styles.submitBtn, loading && styles.btnDisabled]}
+                  style={[styles.submitBtn, (loading || forgotStep !== 'idle') && styles.btnDisabled]}
                   onPress={handleEmailAuth}
+                  disabled={loading || googleLoading || forgotStep !== 'idle'}
                   activeOpacity={0.84}
                   disabled={loading || googleLoading}
                 >
@@ -565,4 +659,38 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   footerText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', letterSpacing: 1 },
+  forgotLink: { alignSelf: 'flex-end', marginTop: 8 },
+  forgotLinkText: { fontSize: 12, color: '#FFD700', fontWeight: '600' },
+  forgotPanel: {
+    width: '100%',
+    backgroundColor: 'rgba(255,215,0,0.05)',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.2)',
+    padding: 16,
+    marginBottom: 14,
+  },
+  forgotPanelTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
+  forgotPanelSub: { fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 16, marginBottom: 12 },
+  forgotActions: { flexDirection: 'row', gap: 10 },
+  forgotCancelBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    alignItems: 'center',
+  },
+  forgotCancelText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.6)' },
+  forgotSendBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: Radius.full,
+    backgroundColor: '#FFD700',
+    alignItems: 'center',
+  },
+  forgotSendText: { fontSize: 13, fontWeight: '800', color: '#000' },
+  forgotSentTitle: { fontSize: 16, fontWeight: '700', color: '#44FF88', textAlign: 'center', marginBottom: 8 },
+  forgotSentBody: { fontSize: 13, color: 'rgba(255,255,255,0.55)', textAlign: 'center', lineHeight: 18, marginBottom: 14 },
+  forgotBackBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  forgotBackText: { fontSize: 13, fontWeight: '600', color: '#FFD700' },
 });
