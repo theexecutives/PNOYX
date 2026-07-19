@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import 'react-native-url-polyfill/auto';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
@@ -33,13 +34,15 @@ const createStorageAdapter = () => {
   return AsyncStorage;
 };
 
+// Web needs detectSessionInUrl:true so Supabase auto-handles the ?code= redirect
+// after Google OAuth. Native uses deep-link PKCE so we keep it false there.
 export const supabase: SupabaseClient = isConfigured
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         storage: createStorageAdapter(),
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false,
+        detectSessionInUrl: Platform.OS === 'web',
         flowType: 'pkce',
       },
     })

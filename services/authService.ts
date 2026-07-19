@@ -1,15 +1,34 @@
+import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { supabase, isConfigured } from './supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// ─── Google OAuth ────────────────────────────────────────────────────────────
+// ─── Google OAuth ─────────────────────────────────────────────────────────────
+// Web: plain signInWithOAuth → browser redirect → Supabase picks up ?code= automatically
+// Native: PKCE deep-link via WebBrowser → manual code exchange
 export async function signInWithGoogle(): Promise<{ error?: string }> {
   if (!isConfigured || !supabase) {
-    return { error: 'Backend not connected. Please try again.' };
+    return { error: 'Backend not connected. Please connect your Supabase project.' };
   }
+
   try {
+    if (Platform.OS === 'web') {
+      // Web: let the browser handle the full redirect flow
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+          queryParams: { access_type: 'offline', prompt: 'consent' },
+        },
+      });
+      if (error) return { error: error.message };
+      // Page will redirect; no further action needed here
+      return {};
+    }
+
+    // Native (iOS / Android): PKCE deep-link flow
     const redirectUrl = AuthSession.makeRedirectUri({
       scheme: 'pnoyx',
       path: 'auth',
@@ -33,18 +52,17 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
       return {}; // User cancelled — not an error
     }
     if (result.type !== 'success' || !result.url) {
-      return {}; // Dismissed silently
+      return {};
     }
 
-    // Exchange PKCE code for session
+    // Exchange PKCE code
     const parsedUrl = new URL(result.url);
     const code = parsedUrl.searchParams.get('code');
-
     if (code) {
       const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
       if (exchangeError) return { error: exchangeError.message };
     } else {
-      // Implicit flow fallback
+      // Implicit fallback
       const params = new URLSearchParams(parsedUrl.hash.replace('#', ''));
       const accessToken = params.get('access_token');
       const refreshToken = params.get('refresh_token');
@@ -69,14 +87,12 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
   }
 }
 
-// ─── Email / Password ────────────────────────────────────────────────────────
+// ─── Email + Password ─────────────────────────────────────────────────────────
 export async function signInWithEmail(
   email: string,
   password: string
 ): Promise<{ error?: string }> {
-  if (!isConfigured || !supabase) {
-    return { error: 'Backend not connected.' };
-  }
+  if (!isConfigured || !supabase) return { error: 'Backend not connected.' };
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   return { error: error?.message };
 }
@@ -86,9 +102,7 @@ export async function signUpWithEmail(
   password: string,
   fullName: string
 ): Promise<{ error?: string; needsConfirmation?: boolean }> {
-  if (!isConfigured || !supabase) {
-    return { error: 'Backend not connected.' };
-  }
+  if (!isConfigured || !supabase) return { error: 'Backend not connected.' };
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -97,22 +111,44 @@ export async function signUpWithEmail(
     },
   });
   if (error) return { error: error.message };
-  // If identities is empty the email already exists
   if (data.user && data.user.identities?.length === 0) {
     return { error: 'An account with this email already exists. Please sign in.' };
   }
-  // Supabase may require email confirmation
-  const needsConfirmation = !data.session;
-  return { needsConfirmation };
+  return { needsConfirmation: !data.session };
 }
 
-// ─── Sign Out ────────────────────────────────────────────────────────────────
+// ─── Email OTP (passwordless) ─────────────────────────────────────────────────
+export async function sendEmailOTP(email: string): Promise<{ error?: string }> {
+  if (!isConfigured || !supabase) return { error: 'Backend not connected.' };
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: true,
+    },
+  });
+  return { error: error?.message };
+}
+
+export async function verifyEmailOTP(
+  email: string,
+  token: string
+): Promise<{ error?: string }> {
+  if (!isConfigured || !supabase) return { error: 'Backend not connected.' };
+  const { error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'email',
+  });
+  return { error: error?.message };
+}
+
+// ─── Sign Out ─────────────────────────────────────────────────────────────────
 export async function signOut(): Promise<void> {
   if (!isConfigured || !supabase) return;
   await supabase.auth.signOut();
 }
 
-// ─── Password Reset ──────────────────────────────────────────────────────────
+// ─── Password Reset ───────────────────────────────────────────────────────────
 export async function sendPasswordReset(email: string): Promise<{ error?: string }> {
   if (!isConfigured || !supabase) return { error: 'Backend not connected.' };
   const { error } = await supabase.auth.resetPasswordForEmail(email);
